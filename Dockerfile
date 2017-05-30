@@ -1,18 +1,24 @@
 # Creates pseudo distributed hadoop 2.7.1
 #
-# docker build -t sequenceiq/hadoop .
+# docker build -t fluddeni/hadoop .
 
 FROM sequenceiq/pam:centos-6.5
-MAINTAINER SequenceIQ
+MAINTAINER fluddeni
+
+ENV JAVA_KEY d54c1d3a095b4ff2b6607d096fa80163
+ENV JAVA_VERSION 131
+ENV BUILD_VERSION b11
 
 USER root
 
 # install dev tools
-RUN yum clean all; \
-    rpm --rebuilddb; \
-    yum install -y curl which tar sudo openssh-server openssh-clients rsync
-# update libselinux. see https://github.com/sequenceiq/hadoop-docker/issues/14
-RUN yum update -y libselinux
+# Yum Checksum Issue When Updating `libselinux` https://github.com/sequenceiq/hadoop-docker/issues/62
+RUN yum clean all \
+    && rpm --rebuilddb \
+    && yum install -y wget curl which tar sudo openssh-server openssh-clients rsync \
+    && yum clean all \
+    && yum update -y libselinux \
+    && yum clean all
 
 # passwordless ssh
 RUN ssh-keygen -q -N "" -t dsa -f /etc/ssh/ssh_host_dsa_key
@@ -20,22 +26,26 @@ RUN ssh-keygen -q -N "" -t rsa -f /etc/ssh/ssh_host_rsa_key
 RUN ssh-keygen -q -N "" -t rsa -f /root/.ssh/id_rsa
 RUN cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys
 
+# Downloading Java
+RUN cd /opt && wget -c --header "Cookie: oraclelicense=accept-securebackup-cookie" http://download.oracle.com/otn-pub/java/jdk/8u$JAVA_VERSION-$BUILD_VERSION/$JAVA_KEY/jdk-8u$JAVA_VERSION-linux-x64.tar.gz
+RUN cd /opt && tar xzf jdk-8u$JAVA_VERSION-linux-x64.tar.gz && rm jdk-8u$JAVA_VERSION-linux-x64.tar.gz
+RUN ln -s /opt/jdk1.8.0_$JAVA_VERSION /usr/local/java
+RUN alternatives --install /usr/bin/java java /usr/local/java/bin/java 200000
+RUN alternatives --install /usr/bin/javaws javaws /usr/local/java/bin/javaws 200000
+RUN alternatives --install /usr/bin/javac javac /usr/local/java/bin/javac 200000
 
-# java
-RUN curl -LO 'http://download.oracle.com/otn-pub/java/jdk/7u71-b14/jdk-7u71-linux-x64.rpm' -H 'Cookie: oraclelicense=accept-securebackup-cookie'
-RUN rpm -i jdk-7u71-linux-x64.rpm
-RUN rm jdk-7u71-linux-x64.rpm
-
-ENV JAVA_HOME /usr/java/default
+ENV JAVA_HOME /usr/local/java
 ENV PATH $PATH:$JAVA_HOME/bin
 
 # download native support
 RUN mkdir -p /tmp/native
-RUN curl -Ls http://dl.bintray.com/sequenceiq/sequenceiq-bin/hadoop-native-64-2.7.1.tar | tar -x -C /tmp/native
+RUN curl -L https://github.com/sequenceiq/docker-hadoop-build/releases/download/v2.7.1/hadoop-native-64-2.7.1.tgz | tar -xz -C /tmp/native
 
 # hadoop
-RUN curl -s http://www.eu.apache.org/dist/hadoop/common/hadoop-2.7.1/hadoop-2.7.1.tar.gz | tar -xz -C /usr/local/
+RUN curl -O http://www.eu.apache.org/dist/hadoop/common/hadoop-2.7.1/hadoop-2.7.1.tar.gz
+RUN tar -xzf hadoop-2.7.1.tar.gz -C /usr/local/
 RUN cd /usr/local && ln -s ./hadoop-2.7.1 hadoop
+ENV PATH $PATH:/usr/local/hadoop-2.7.1/bin:/usr/local/hadoop-2.7.1/sbin
 
 ENV HADOOP_PREFIX /usr/local/hadoop
 ENV HADOOP_COMMON_HOME /usr/local/hadoop
@@ -45,7 +55,7 @@ ENV HADOOP_YARN_HOME /usr/local/hadoop
 ENV HADOOP_CONF_DIR /usr/local/hadoop/etc/hadoop
 ENV YARN_CONF_DIR $HADOOP_PREFIX/etc/hadoop
 
-RUN sed -i '/^export JAVA_HOME/ s:.*:export JAVA_HOME=/usr/java/default\nexport HADOOP_PREFIX=/usr/local/hadoop\nexport HADOOP_HOME=/usr/local/hadoop\n:' $HADOOP_PREFIX/etc/hadoop/hadoop-env.sh
+RUN sed -i '/^export JAVA_HOME/ s:.*:export JAVA_HOME=/usr/local/java\nexport HADOOP_PREFIX=/usr/local/hadoop\nexport HADOOP_HOME=/usr/local/hadoop\n:' $HADOOP_PREFIX/etc/hadoop/hadoop-env.sh
 RUN sed -i '/^export HADOOP_CONF_DIR/ s:.*:export HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop/:' $HADOOP_PREFIX/etc/hadoop/hadoop-env.sh
 #RUN . $HADOOP_PREFIX/etc/hadoop/hadoop-env.sh
 
@@ -69,14 +79,6 @@ RUN mv /tmp/native /usr/local/hadoop/lib
 ADD ssh_config /root/.ssh/config
 RUN chmod 600 /root/.ssh/config
 RUN chown root:root /root/.ssh/config
-
-# # installing supervisord
-# RUN yum install -y python-setuptools
-# RUN easy_install pip
-# RUN curl https://bitbucket.org/pypa/setuptools/raw/bootstrap/ez_setup.py -o - | python
-# RUN pip install supervisor
-#
-# ADD supervisord.conf /etc/supervisord.conf
 
 ADD bootstrap.sh /etc/bootstrap.sh
 RUN chown root:root /etc/bootstrap.sh
@@ -102,7 +104,7 @@ CMD ["/etc/bootstrap.sh", "-d"]
 # Hdfs ports
 EXPOSE 50010 50020 50070 50075 50090 8020 9000
 # Mapred ports
-EXPOSE 19888
+EXPOSE 10020 19888
 #Yarn ports
 EXPOSE 8030 8031 8032 8033 8040 8042 8088
 #Other ports
