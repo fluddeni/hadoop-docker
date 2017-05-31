@@ -1,4 +1,4 @@
-# Creates pseudo distributed hadoop 2.7.2
+# Creates pseudo distributed hadoop 2.7.3
 #
 # docker build -t fluddeni/hadoop .
 
@@ -38,10 +38,10 @@ ENV JAVA_HOME /usr/local/java
 ENV PATH $PATH:$JAVA_HOME/bin
 
 # hadoop
-RUN curl -O http://www.eu.apache.org/dist/hadoop/common/hadoop-2.7.2/hadoop-2.7.2.tar.gz
-RUN tar -xzf hadoop-2.7.2.tar.gz -C /usr/local/
-RUN cd /usr/local && ln -s ./hadoop-2.7.2 hadoop
-ENV PATH $PATH:/usr/local/hadoop-2.7.2/bin:/usr/local/hadoop-2.7.2/sbin
+RUN curl -O http://www.eu.apache.org/dist/hadoop/common/hadoop-2.7.3/hadoop-2.7.3.tar.gz
+RUN tar -xzf hadoop-2.7.3.tar.gz -C /usr/local/
+RUN cd /usr/local && ln -s ./hadoop-2.7.3 hadoop
+ENV PATH $PATH:/usr/local/hadoop-2.7.3/bin:/usr/local/hadoop-2.7.3/sbin
 
 # download native support
 RUN mkdir -p /tmp/native
